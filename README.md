@@ -102,14 +102,19 @@ Running `npm run seed` populates the database with:
 
 ---
 
-## Running Tests
+## Development Commands
 
 ```bash
-# Backend (43 tests)
-cd apps/api && npm test
+# Run tests
+cd apps/api && npm test        # Backend (43 tests)
+cd apps/web && npm test        # Frontend (13 tests)
 
-# Frontend (13 tests)
-cd apps/web && npm test
+# Type checking
+cd apps/api && npx tsc --noEmit
+cd apps/web && npx tsc --noEmit
+
+# Inspect database (opens at localhost:5555)
+cd apps/api && npx prisma studio
 ```
 
 ---
