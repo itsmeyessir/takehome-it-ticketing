@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/** User roles: END_USER creates tickets, DEPARTMENT_MEMBER handles them */
+enum Role {
+  END_USER
+  DEPARTMENT_MEMBER
+}
+
+/** Ticket lifecycle: OPEN → IN_PROGRESS → ESCALATED → RESOLVED → CLOSED */
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  ESCALATED
+  RESOLVED
+  CLOSED
+}
+
+/** Activity log action types — every state change is tracked */
+enum ActionType {
+  CREATED
+  ASSIGNED
+  REASSIGNED
+  STATUS_CHANGE
+  ESCALATED
+}
+
+/**
+ * Users belong to exactly one department. Department members handle tickets
+ * in their department. End users only create and track their own tickets.
+ */
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  name         String
+  passwordHash String      @map("password_hash")
+  role         Role
+  department   Department  @relation(fields: [departmentId], references: [id])
+  departmentId String      @map("department_id")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  createdTickets   Ticket[]   @relation("TicketCreator")
+  assignedTickets  Ticket[]   @relation("TicketAssignee")
+  activityLogs     ActivityLog[]
+
+  @@map("users")
+}
+
+/**
+ * Departments are fulfillment teams (Help Desk, Tier 2, Infrastructure).
+ * Marketing is a non-pipeline department for end users only.
+ */
+model Department {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  members  User[]
+  tickets  Ticket[]
+
+  @@map("departments")
+}
+
+/**
+ * Ticket types define which pipeline a ticket follows.
+ * e.g., "IT Hardware" → Help Desk → Tier 2 → Infrastructure
+ */
+model TicketType {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tickets Ticket[]
+
+  @@map("ticket_types")
+}
+
+/**
+ * Core ticket model. assignedToId is nullable — unassigned tickets appear
+ * in the department queue without needing a special "unassigned" user.
+ * Escalation clears assignedToId and moves to the next department.
+ */
+model Ticket {
+  id                 String       @id @default(cuid())
+  title              String
+  description        String
+  status             TicketStatus @default(OPEN)
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  createdBy          User         @relation("TicketCreator", fields: [createdById], references: [id])
+  createdById        String       @map("created_by_id")
+
+  assignedTo         User?        @relation("TicketAssignee", fields: [assignedToId], references: [id])
+  assignedToId       String?      @map("assigned_to_id")
+
+  currentDepartment  Department   @relation(fields: [currentDepartmentId], references: [id])
+  currentDepartmentId String      @map("current_department_id")
+
+  ticketType         TicketType   @relation(fields: [typeId], references: [id])
+  typeId             String       @map("type_id")
+
+  activities         ActivityLog[]
+
+  @@map("tickets")
+}
+
+/**
+ * Structured activity log — records every action on a ticket.
+ * old_value/new_value capture state changes (e.g., "Help Desk" → "Tier 2 Support").
+ * message is optional (used for escalation notes and status remarks).
+ */
+model ActivityLog {
+  id        String     @id @default(cuid())
+  action    ActionType
+  oldValue  String?    @map("old_value")
+  newValue  String?    @map("new_value")
+  message   String?
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+  ticketId String @map("ticket_id")
+
+  actor   User   @relation(fields: [actorId], references: [id])
+  actorId String @map("actor_id")
+
+  @@map("activity_logs")
+}
