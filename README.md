@@ -52,6 +52,8 @@ Create `apps/api/.env`:
 ```
 DATABASE_URL="postgresql://takehome:takehome_secret@localhost:5433/takehome?schema=public"
 JWT_SECRET="your-secret-key-here"
+WEB_URL="http://localhost:3000"
+PORT=4000
 ```
 
 ---
